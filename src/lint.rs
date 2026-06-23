@@ -106,7 +106,9 @@ fn get_dirty_files(repo: &Path) -> Result<Vec<String>, std::io::Error> {
 fn matches_pattern(path: &str, pattern: &str) -> bool {
     if pattern.ends_with("/**") {
         let prefix = &pattern[..pattern.len() - 3];
-        path.starts_with(prefix)
+        // Must match the directory exactly, not just start with the string
+        // e.g. "src/**" should match "src/foo.rs" but not "srclib/foo.rs"
+        path == prefix || path.starts_with(&format!("{}/", prefix))
     } else if pattern.contains('*') {
         let regex_pattern = pattern
             .replace('.', r"\.")
@@ -140,6 +142,9 @@ mod tests {
         assert!(matches_pattern("src/main.rs", "src/**"));
         assert!(matches_pattern("src/deep/nested.rs", "src/**"));
         assert!(!matches_pattern("tests/foo.rs", "src/**"));
+        // Must not match prefix-similar directories
+        assert!(!matches_pattern("srclib/foo.rs", "src/**"));
+        assert!(!matches_pattern("src2/foo.rs", "src/**"));
     }
 
     #[test]
