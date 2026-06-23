@@ -19,6 +19,7 @@ pub struct LintFinding {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[allow(dead_code)] // Error and Info are available for future lint rules
 pub enum LintSeverity {
     Error,
     Warning,
@@ -139,5 +140,65 @@ mod tests {
         assert!(matches_pattern("src/main.rs", "src/**"));
         assert!(matches_pattern("src/deep/nested.rs", "src/**"));
         assert!(!matches_pattern("tests/foo.rs", "src/**"));
+    }
+
+    #[test]
+    fn pattern_empty_strings() {
+        assert!(!matches_pattern("", "src/**"));
+        assert!(!matches_pattern("anything", ""));
+        assert!(matches_pattern("", ""));
+    }
+
+    #[test]
+    fn lint_finds_missing_required_files() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let contract = Contract {
+            project: crate::contract::ProjectMeta {
+                name: "test".into(),
+                required_files: vec!["MISSING.md".into()],
+                style: vec![],
+            },
+            safe_zones: vec![],
+            protected: vec![],
+            validation: vec![],
+            ownership: vec![],
+        };
+        let result = lint(tmp.path(), &contract);
+        assert_eq!(result.findings.len(), 1);
+        assert!(result.findings[0].message.contains("MISSING.md"));
+    }
+
+    #[test]
+    fn lint_passes_when_required_files_exist() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("README.md"), "# Test").unwrap();
+        let contract = Contract {
+            project: crate::contract::ProjectMeta {
+                name: "test".into(),
+                required_files: vec!["README.md".into()],
+                style: vec![],
+            },
+            safe_zones: vec![],
+            protected: vec![],
+            validation: vec![],
+            ownership: vec![],
+        };
+        let result = lint(tmp.path(), &contract);
+        assert!(result.findings.is_empty());
+        assert!(result.pass);
+    }
+
+    #[test]
+    fn lint_empty_contract() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let contract = Contract {
+            project: crate::contract::ProjectMeta::default(),
+            safe_zones: vec![],
+            protected: vec![],
+            validation: vec![],
+            ownership: vec![],
+        };
+        let result = lint(tmp.path(), &contract);
+        assert!(result.pass);
     }
 }
